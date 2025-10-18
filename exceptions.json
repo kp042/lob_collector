@@ -2,11 +2,14 @@
     "exceptions": [
         "EURIUSDT",
         "TUSDUSDT",
+        "USD1USDT",
+        "USDEUSDT",
         "USDCUSDT",
         "USDPUSDT",
         "XUSDUSDT",
         "AEURUSDT",
         "FDUSDUSDT",
-        "EURUSDT"
+        "EURUSDT",        
+        "BFUSDUSDT"
     ]
 }

@@ -1,9 +1,12 @@
 """
-LOB collector from Binance.
-All usdt pairs.
+LOB (Limit Order Book) collector from Binance.
+Agggregated LOB by depth pcts data -> Kafka.
+
+All USDT and TRADING pairs.
 SPOT market only.
-Agg data -> kafka.
+
 VPS with 2 IP.
+~8-9 minutes for each itteration (for all coins) approximetely.
 """
 
 import requests
@@ -19,13 +22,13 @@ from urllib3.util.retry import Retry
 from logging.handlers import RotatingFileHandler
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from confluent_kafka import Producer
-
+from config import config
 
 # Private data
-MAIN_IP = "176.126.84.79"
-ADDITIONAL_IP = ""
-KAFKA_BROKER = "103.73.66.195:9092"
-KAFKA_TOPIC = "binanceloballspot"
+MAIN_IP = config.ip.main_ip
+ADDITIONAL_IP = config.ip.second_ip
+KAFKA_BROKER = config.kafka.kafka_broker
+KAFKA_TOPIC = config.kafka.kafka_topic
 
 # Binance configuration parameters
 DEPTH_URL = "https://api.binance.com/api/v3/depth"
@@ -34,23 +37,21 @@ MAX_REQUESTS = 5
 REQUEST_INTERVAL = 2.5
 TIMEOUT = 10
 
-# Files
+# Logs
 LOG_FILE = "collector.log"
-SETTINGS_FILE = "exceptions.json"
-
 
 # Kafka configuration
 KAFKA_CONFIG = {
-    'bootstrap.servers': KAFKA_BROKER,  # Основной брокер
+    'bootstrap.servers': KAFKA_BROKER,
     'client.id': 'lobcollector_allspot',
-    'acks': 1,                             # Подтверждение от лидера (баланс между надежностью и скоростью)
-    'retries': 2,                          # Минимальное количество попыток
-    'compression.type': 'none',            # Без сжатия для минимальной задержки
-    'batch.num.messages': 10,              # Очень маленький батч
-    'linger.ms': 0,                        # Отправка сразу без задержки
-    'queue.buffering.max.messages': 1000,  # Небольшая очередь на случай временных проблем
-    'message.timeout.ms': 3000,            # Таймаут отправки 3 секунды
-    'socket.timeout.ms': 3000,             # Таймаут сокета
+    'acks': 1,                                  # Подтверждение от лидера (баланс между надежностью и скоростью)
+    'retries': 2,                               # Минимальное количество попыток
+    'compression.type': 'none',                 # Без сжатия для минимальной задержки
+    'batch.num.messages': 10,                   # Очень маленький батч
+    'linger.ms': 0,                             # Отправка сразу без задержки
+    'queue.buffering.max.messages': 1000,       # Небольшая очередь на случай временных проблем
+    'message.timeout.ms': 3000,                 # Таймаут отправки 3 секунды
+    'socket.timeout.ms': 3000,                  # Таймаут сокета
     'max.in.flight.requests.per.connection': 1  # Гарантия порядка сообщений
 }
 
@@ -75,14 +76,6 @@ def setup_logging():
         handlers=[file_handler, console_handler]
     )
 
-def get_symbols():
-    try:
-        with open(SETTINGS_FILE, 'r') as f:
-            config = json.load(f)
-            return config.get("symbols", [])
-    except Exception as e:
-        logging.error(f"Error loading symbols: {e}")
-        raise
 
 # Callback для обработки статуса доставки Kafka
 def kafka_delivery_report(err, msg):
@@ -92,10 +85,17 @@ def kafka_delivery_report(err, msg):
         logging.debug(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
 
+def get_exception_list():
+    try:
+        with open("exceptions.json", 'r') as f:
+            return json.load(f).get("exceptions", [])
+    except Exception as e:
+        raise 
+
+
 class IPSessionManager:
     def __init__(self):
         self.sessions = [self.create_session(MAIN_IP), self.create_session(ADDITIONAL_IP)]
-        # self.sessions += [self.create_session(ip) for ip in ADDITIONAL_IPS]
     
     @retry(
         stop=stop_after_attempt(3),
@@ -117,15 +117,29 @@ class IPSessionManager:
 
 
 class OrderBookCollector:
-    def __init__(self):
-        setup_logging()        
+    def __init__(self):        
         self.session_manager = IPSessionManager()
         self.symbols = self.load_symbols()
         self.kafka_producer = Producer(KAFKA_CONFIG)
         logging.info(f"Loaded {len(self.symbols)} symbols from configuration")
-        
-    def load_symbols(self):        
-        return get_symbols()
+    
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+    def fetch_symbols(self):
+        try:
+            EXCLUDE_SYMBOLS = get_exception_list()
+            response = requests.get(API_URL, timeout=TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            return [
+                s['symbol'] for s in data['symbols']
+                if s['quoteAsset'] == 'USDT' 
+                and s['symbol'] not in EXCLUDE_SYMBOLS
+                and s['status'] == 'TRADING'
+            ]
+        except Exception as e:
+            logging.error(f"Failed to fetch symbols: {e}")
+            raise
+
     
     def analyze_orderbook(self, symbol, orderbook_data):
         if not orderbook_data:
@@ -331,5 +345,6 @@ class OrderBookCollector:
 
 
 if __name__ == '__main__':
+    setup_logging()
     collector = OrderBookCollector()
     collector.run()
