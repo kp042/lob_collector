@@ -1,0 +1,12 @@
+{
+    "exceptions": [
+        "EURIUSDT",
+        "TUSDUSDT",
+        "USDCUSDT",
+        "USDPUSDT",
+        "XUSDUSDT",
+        "AEURUSDT",
+        "FDUSDUSDT",
+        "EURUSDT"
+    ]
+}

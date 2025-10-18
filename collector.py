@@ -1,8 +1,9 @@
 """
-Testing collector for 90 usdt pairs by cmc
-Agg data -> kafka
-For stkhlm4rest1 VPS (5 IPs)
-
+LOB collector from Binance.
+All usdt pairs.
+SPOT market only.
+Agg data -> kafka.
+VPS with 2 IP.
 """
 
 import requests
@@ -19,27 +20,29 @@ from logging.handlers import RotatingFileHandler
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 from confluent_kafka import Producer
 
-# Configuration parameters
+
+# Private data
+MAIN_IP = "176.126.84.79"
+ADDITIONAL_IP = ""
+KAFKA_BROKER = "103.73.66.195:9092"
+KAFKA_TOPIC = "binanceloballspot"
+
+# Binance configuration parameters
 DEPTH_URL = "https://api.binance.com/api/v3/depth"
 MAX_DEPTH = 5000
 MAX_REQUESTS = 5
 REQUEST_INTERVAL = 2.5
 TIMEOUT = 10
-MAIN_IP = "176.126.84.79"
-ADDITIONAL_IPS = [
-    "176.126.84.86",
-    "176.126.86.10",
-    "176.126.86.163",
-    "176.126.86.29"
-]
+
+# Files
 LOG_FILE = "collector.log"
-SETTINGS_FILE = "settings.json"
+SETTINGS_FILE = "exceptions.json"
 
 
 # Kafka configuration
 KAFKA_CONFIG = {
-    'bootstrap.servers': '103.73.66.195:9092',  # Основной брокер
-    'client.id': 'restlobcollector_stkhlm4rest1',
+    'bootstrap.servers': KAFKA_BROKER,  # Основной брокер
+    'client.id': 'lobcollector_allspot',
     'acks': 1,                             # Подтверждение от лидера (баланс между надежностью и скоростью)
     'retries': 2,                          # Минимальное количество попыток
     'compression.type': 'none',            # Без сжатия для минимальной задержки
@@ -50,7 +53,6 @@ KAFKA_CONFIG = {
     'socket.timeout.ms': 3000,             # Таймаут сокета
     'max.in.flight.requests.per.connection': 1  # Гарантия порядка сообщений
 }
-KAFKA_TOPIC = "binancerestlob"
 
 
 def setup_logging():
@@ -90,11 +92,10 @@ def kafka_delivery_report(err, msg):
         logging.debug(f"Message delivered to {msg.topic()} [{msg.partition()}]")
 
 
-# Менеджер сетевых сессий
 class IPSessionManager:
     def __init__(self):
-        self.sessions = [self.create_session(MAIN_IP)]
-        self.sessions += [self.create_session(ip) for ip in ADDITIONAL_IPS]
+        self.sessions = [self.create_session(MAIN_IP), self.create_session(ADDITIONAL_IP)]
+        # self.sessions += [self.create_session(ip) for ip in ADDITIONAL_IPS]
     
     @retry(
         stop=stop_after_attempt(3),
