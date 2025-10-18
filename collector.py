@@ -12,7 +12,6 @@ VPS with 2 IP.
 import requests
 import time
 import logging
-import sqlite3
 import json
 import uuid
 from datetime import datetime, timezone
@@ -31,6 +30,7 @@ KAFKA_BROKER = config.kafka.kafka_broker
 KAFKA_TOPIC = config.kafka.kafka_topic
 
 # Binance configuration parameters
+EXCHANGE_INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"  # to fetch symbols
 DEPTH_URL = "https://api.binance.com/api/v3/depth"
 MAX_DEPTH = 5000
 MAX_REQUESTS = 5
@@ -119,7 +119,7 @@ class IPSessionManager:
 class OrderBookCollector:
     def __init__(self):        
         self.session_manager = IPSessionManager()
-        self.symbols = self.load_symbols()
+        self.symbols = self.fetch_symbols()
         self.kafka_producer = Producer(KAFKA_CONFIG)
         logging.info(f"Loaded {len(self.symbols)} symbols from configuration")
     
@@ -127,19 +127,31 @@ class OrderBookCollector:
     def fetch_symbols(self):
         try:
             EXCLUDE_SYMBOLS = get_exception_list()
-            response = requests.get(API_URL, timeout=TIMEOUT)
+
+            session = self.session_manager.sessions[0]
+            response = session.get(EXCHANGE_INFO_URL, timeout=TIMEOUT)
+            # response = requests.get(API_URL, timeout=TIMEOUT)
             response.raise_for_status()
             data = response.json()
-            return [
+
+            symbols = [
                 s['symbol'] for s in data['symbols']
                 if s['quoteAsset'] == 'USDT' 
                 and s['symbol'] not in EXCLUDE_SYMBOLS
                 and s['status'] == 'TRADING'
             ]
+            logging.info(f"Fetched {len(symbols)} active trading symbols")
+            return symbols
+            # return [
+            #     s['symbol'] for s in data['symbols']
+            #     if s['quoteAsset'] == 'USDT' 
+            #     and s['symbol'] not in EXCLUDE_SYMBOLS
+            #     and s['status'] == 'TRADING'
+            # ]
         except Exception as e:
             logging.error(f"Failed to fetch symbols: {e}")
             raise
-
+    
     
     def analyze_orderbook(self, symbol, orderbook_data):
         if not orderbook_data:
@@ -151,7 +163,7 @@ class OrderBookCollector:
         if not bids or not asks:
             return {'symbol': symbol, 'status': 'incomplete_data'}
 
-        
+        lastUpdateId = orderbook_data.get('lastUpdateId', int)
         count_bid_levels = len(bids)
         count_ask_levels = len(asks)
         best_bid = float(bids[0][0]) if bids else 0.0
@@ -228,6 +240,7 @@ class OrderBookCollector:
             'count_ask_levels': count_ask_levels,
             'max_pct_from_best_bid': max_pct_from_best_bid,
             'max_pct_from_best_ask': max_pct_from_best_ask,
+            'lastUpdateId': lastUpdateId,
             'event_time': int(time.time()),
             'status': 'ok'
         }
@@ -279,6 +292,18 @@ class OrderBookCollector:
             logging.error(f"Failed to process {symbol}: {e}")
             return {'symbol': symbol, 'status': 'error', 'error': str(e)}
     
+    @staticmethod
+    def check_kafka_connection():
+        """Check Kafka broker availability"""
+        try:
+            producer = Producer(KAFKA_CONFIG)
+            producer.produce(KAFKA_TOPIC, value='test')
+            producer.flush(5)
+            logging.info("Kafka connection: OK")
+            return True
+        except Exception as e:
+            logging.error(f"Kafka connection failed: {e}")
+            return False
 
     def send_to_kafka(self, data):
         try:
@@ -298,6 +323,7 @@ class OrderBookCollector:
     
     def run(self):
         logging.info("Starting collector service with Kafka integration")
+        self.check_kafka_connection()
         
         while True:
             iteration_id = str(uuid.uuid4())
@@ -305,6 +331,8 @@ class OrderBookCollector:
             total_success = 0
             total_failed = 0
             all_failed_symbols = []
+            self.symbols = self.fetch_symbols()
+            time.sleep(REQUEST_INTERVAL)
             
             try:                
                 for i in range(0, len(self.symbols), MAX_REQUESTS):
