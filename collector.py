@@ -29,6 +29,14 @@ ADDITIONAL_IP = config.ip.second_ip
 KAFKA_BROKER = config.kafka.kafka_broker
 KAFKA_TOPIC = config.kafka.kafka_topic
 
+# ДИАГНОСТИКА: Выводим конфигурацию ДО использования
+print("=== CONFIG DEBUG ===")
+print(f"MAIN_IP: {config.ip.main_ip}")
+print(f"ADDITIONAL_IP: {config.ip.second_ip}")
+print(f"KAFKA_BROKER: {config.kafka.kafka_broker}")
+print(f"KAFKA_TOPIC: {config.kafka.kafka_topic}")
+print("====================")
+
 # Binance configuration parameters
 EXCHANGE_INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"  # to fetch symbols
 DEPTH_URL = "https://api.binance.com/api/v3/depth"
@@ -72,7 +80,7 @@ def setup_logging():
     console_handler.setFormatter(formatter)
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,
         handlers=[file_handler, console_handler]
     )
 
@@ -127,8 +135,12 @@ class OrderBookCollector:
     def __init__(self):        
         self.session_manager = IPSessionManager()
         self.symbols = self.fetch_symbols()
+        logging.debug(f"DEBUG: KAFKA_BROKER = {KAFKA_BROKER}")
+        logging.debug(f"DEBUG: KAFKA_TOPIC = {KAFKA_TOPIC}")
+        logging.debug(f"DEBUG: KAFKA_CONFIG = {KAFKA_CONFIG}")
         self.kafka_producer = Producer(KAFKA_CONFIG)
         logging.info(f"Loaded {len(self.symbols)} symbols from configuration")
+        
     
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
     def fetch_symbols(self):
@@ -183,8 +195,17 @@ class OrderBookCollector:
             Decimal('0.00000001'),
             rounding=ROUND_HALF_UP
         ) if asks else Decimal('0')
-        max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
-        max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
+
+        best_bid_float = float(best_bid)
+        best_ask_float = float(best_ask)
+        min_bid_float = float(min_bid)
+        max_ask_float = float(max_ask)
+        
+        max_pct_from_best_bid = round((best_bid_float - min_bid_float) / best_bid_float * 100)
+        max_pct_from_best_ask = round((max_ask_float - best_ask_float) / best_ask_float * 100)
+
+        # max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
+        # max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
 
         # Расчет глубины стакана
         def calculate_depth(orders, threshold, is_ask):
@@ -203,24 +224,42 @@ class OrderBookCollector:
             return total_sum
 
 
-        # Calculate depth
-        bid_1 = calculate_depth(bids, best_bid * (1 - 0.01), False)
-        bid_3 = calculate_depth(bids, best_bid * (1 - 0.03), False)
-        bid_5 = calculate_depth(bids, best_bid * (1 - 0.05), False)
-        bid_8 = calculate_depth(bids, best_bid * (1 - 0.08), False)
-        bid_15 = calculate_depth(bids, best_bid * (1 - 0.15), False)
-        bid_20 = calculate_depth(bids, best_bid * (1 - 0.2), False)
-        bid_30 = calculate_depth(bids, best_bid * (1 - 0.3), False)
-        bid_60 = calculate_depth(bids, best_bid * (1 - 0.6), False)
+        # Calculate depth используя float значения
+        bid_1 = calculate_depth(bids, best_bid_float * (1 - 0.01), False)
+        bid_3 = calculate_depth(bids, best_bid_float * (1 - 0.03), False)
+        bid_5 = calculate_depth(bids, best_bid_float * (1 - 0.05), False)
+        bid_8 = calculate_depth(bids, best_bid_float * (1 - 0.08), False)
+        bid_15 = calculate_depth(bids, best_bid_float * (1 - 0.15), False)
+        bid_20 = calculate_depth(bids, best_bid_float * (1 - 0.2), False)
+        bid_30 = calculate_depth(bids, best_bid_float * (1 - 0.3), False)
+        bid_60 = calculate_depth(bids, best_bid_float * (1 - 0.6), False)
 
-        ask_1 = calculate_depth(asks, best_ask * (1 + 0.01), True)
-        ask_3 = calculate_depth(asks, best_ask * (1 + 0.03), True)
-        ask_5 = calculate_depth(asks, best_ask * (1 + 0.05), True)
-        ask_8 = calculate_depth(asks, best_ask * (1 + 0.08), True)
-        ask_15 = calculate_depth(asks, best_ask * (1 + 0.15), True)
-        ask_20 = calculate_depth(asks, best_ask * (1 + 0.2), True)
-        ask_30 = calculate_depth(asks, best_ask * (1 + 0.3), True)
-        ask_60 = calculate_depth(asks, best_ask * (1 + 0.6), True)
+        ask_1 = calculate_depth(asks, best_ask_float * (1 + 0.01), True)
+        ask_3 = calculate_depth(asks, best_ask_float * (1 + 0.03), True)
+        ask_5 = calculate_depth(asks, best_ask_float * (1 + 0.05), True)
+        ask_8 = calculate_depth(asks, best_ask_float * (1 + 0.08), True)
+        ask_15 = calculate_depth(asks, best_ask_float * (1 + 0.15), True)
+        ask_20 = calculate_depth(asks, best_ask_float * (1 + 0.2), True)
+        ask_30 = calculate_depth(asks, best_ask_float * (1 + 0.3), True)
+        ask_60 = calculate_depth(asks, best_ask_float * (1 + 0.6), True)
+        # # Calculate depth
+        # bid_1 = calculate_depth(bids, best_bid * (1 - 0.01), False)
+        # bid_3 = calculate_depth(bids, best_bid * (1 - 0.03), False)
+        # bid_5 = calculate_depth(bids, best_bid * (1 - 0.05), False)
+        # bid_8 = calculate_depth(bids, best_bid * (1 - 0.08), False)
+        # bid_15 = calculate_depth(bids, best_bid * (1 - 0.15), False)
+        # bid_20 = calculate_depth(bids, best_bid * (1 - 0.2), False)
+        # bid_30 = calculate_depth(bids, best_bid * (1 - 0.3), False)
+        # bid_60 = calculate_depth(bids, best_bid * (1 - 0.6), False)
+
+        # ask_1 = calculate_depth(asks, best_ask * (1 + 0.01), True)
+        # ask_3 = calculate_depth(asks, best_ask * (1 + 0.03), True)
+        # ask_5 = calculate_depth(asks, best_ask * (1 + 0.05), True)
+        # ask_8 = calculate_depth(asks, best_ask * (1 + 0.08), True)
+        # ask_15 = calculate_depth(asks, best_ask * (1 + 0.15), True)
+        # ask_20 = calculate_depth(asks, best_ask * (1 + 0.2), True)
+        # ask_30 = calculate_depth(asks, best_ask * (1 + 0.3), True)
+        # ask_60 = calculate_depth(asks, best_ask * (1 + 0.6), True)
 
         total_bid_volume = sum(float(p) * float(q) for p, q in bids)
         total_ask_volume = sum(float(p) * float(q) for p, q in asks)
