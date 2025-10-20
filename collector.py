@@ -294,16 +294,33 @@ class OrderBookCollector:
     
     @staticmethod
     def check_kafka_connection():
-        """Check Kafka broker availability"""
+        """Check Kafka broker availability without sending test messages"""
         try:
             producer = Producer(KAFKA_CONFIG)
-            producer.produce(KAFKA_TOPIC, value='test')
-            producer.flush(5)
-            logging.info("Kafka connection: OK")
+            # Просто создаем продюсера без отправки сообщения
+            # или проверяем метаданные топика
+            metadata = producer.list_topics(timeout=5)
+            if KAFKA_TOPIC in metadata.topics:
+                logging.info("Kafka connection: OK, topic exists")
+            else:
+                logging.warning(f"Kafka topic {KAFKA_TOPIC} not found")
+            producer.flush(1)
             return True
         except Exception as e:
             logging.error(f"Kafka connection failed: {e}")
             return False
+    
+    # def check_kafka_connection():
+    #     """Check Kafka broker availability"""
+    #     try:
+    #         producer = Producer(KAFKA_CONFIG)
+    #         producer.produce(KAFKA_TOPIC, value='test')
+    #         producer.flush(5)
+    #         logging.info("Kafka connection: OK")
+    #         return True
+    #     except Exception as e:
+    #         logging.error(f"Kafka connection failed: {e}")
+    #         return False
 
     def send_to_kafka(self, data):
         try:
