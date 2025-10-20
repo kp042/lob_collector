@@ -8,7 +8,7 @@ SPOT market only.
 VPS with 2 IP.
 ~8-9 minutes for each itteration (for all coins) approximetely.
 """
-
+from decimal import Decimal, ROUND_HALF_UP
 import requests
 import time
 import logging
@@ -167,10 +167,22 @@ class OrderBookCollector:
         lastUpdateId = orderbook_data.get('lastUpdateId', 0)
         count_bid_levels = len(bids)
         count_ask_levels = len(asks)
-        best_bid = float(bids[0][0]) if bids else 0.0
-        best_ask = float(asks[0][0]) if asks else 0.0
-        min_bid = float(bids[-1][0]) if bids else 0.0
-        max_ask = float(asks[-1][0]) if asks else 0.0
+        best_bid = Decimal(bids[0][0]).quantize(
+            Decimal('0.00000001'),
+            rounding=ROUND_HALF_UP
+        ) if bids else Decimal('0')
+        best_ask = Decimal(asks[0][0]).quantize(
+            Decimal('0.00000001'),
+            rounding=ROUND_HALF_UP
+        ) if bids else Decimal('0')
+        min_bid = Decimal(bids[-1][0]).quantize(
+            Decimal('0.00000001'),
+            rounding=ROUND_HALF_UP
+        ) if bids else Decimal('0')
+        max_ask = Decimal(asks[-1][0]).quantize(
+            Decimal('0.00000001'),
+            rounding=ROUND_HALF_UP
+        ) if bids else Decimal('0')
         max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
         max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
 
@@ -215,10 +227,10 @@ class OrderBookCollector:
 
         return {
             'symbol': symbol,
-            'best_bid': best_bid,
-            'best_ask': best_ask,
-            'min_bid': min_bid,
-            'max_ask': max_ask,
+            'best_bid': str(best_bid),
+            'best_ask': str(best_ask),
+            'min_bid': str(min_bid),
+            'max_ask': str(max_ask),
             'depth_1pct_bid': round(bid_1),
             'depth_1pct_ask': round(ask_1),
             'depth_3pct_bid': round(bid_3),
