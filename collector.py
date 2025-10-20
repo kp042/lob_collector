@@ -174,7 +174,7 @@ class OrderBookCollector:
         best_ask = Decimal(asks[0][0]).quantize(
             Decimal('0.00000001'),
             rounding=ROUND_HALF_UP
-        ) if bids else Decimal('0')
+        ) if asks else Decimal('0')
         min_bid = Decimal(bids[-1][0]).quantize(
             Decimal('0.00000001'),
             rounding=ROUND_HALF_UP
@@ -182,7 +182,7 @@ class OrderBookCollector:
         max_ask = Decimal(asks[-1][0]).quantize(
             Decimal('0.00000001'),
             rounding=ROUND_HALF_UP
-        ) if bids else Decimal('0')
+        ) if asks else Decimal('0')
         max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
         max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
 
