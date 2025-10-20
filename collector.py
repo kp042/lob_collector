@@ -298,7 +298,8 @@ class OrderBookCollector:
             'max_pct_from_best_bid': max_pct_from_best_bid,
             'max_pct_from_best_ask': max_pct_from_best_ask,
             'lastUpdateId': lastUpdateId,
-            'event_time': int(time.time())            
+            'event_time': int(time.time()),
+            'status': 'ok'
         }
     
     def process_batch(self, batch, iteration_id):
