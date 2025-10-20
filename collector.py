@@ -8,7 +8,7 @@ SPOT market only.
 VPS with 2 IP.
 ~8-9 minutes for each itteration (for all coins) approximetely.
 """
-from decimal import Decimal, ROUND_HALF_UP
+# from decimal import Decimal, ROUND_HALF_UP
 import requests
 import time
 import logging
@@ -29,13 +29,6 @@ ADDITIONAL_IP = config.ip.second_ip
 KAFKA_BROKER = config.kafka.kafka_broker
 KAFKA_TOPIC = config.kafka.kafka_topic
 
-# ДИАГНОСТИКА: Выводим конфигурацию ДО использования
-print("=== CONFIG DEBUG ===")
-print(f"MAIN_IP: {config.ip.main_ip}")
-print(f"ADDITIONAL_IP: {config.ip.second_ip}")
-print(f"KAFKA_BROKER: {config.kafka.kafka_broker}")
-print(f"KAFKA_TOPIC: {config.kafka.kafka_topic}")
-print("====================")
 
 # Binance configuration parameters
 EXCHANGE_INFO_URL = "https://api.binance.com/api/v3/exchangeInfo"  # to fetch symbols
@@ -135,9 +128,6 @@ class OrderBookCollector:
     def __init__(self):        
         self.session_manager = IPSessionManager()
         self.symbols = self.fetch_symbols()
-        logging.debug(f"DEBUG: KAFKA_BROKER = {KAFKA_BROKER}")
-        logging.debug(f"DEBUG: KAFKA_TOPIC = {KAFKA_TOPIC}")
-        logging.debug(f"DEBUG: KAFKA_CONFIG = {KAFKA_CONFIG}")
         self.kafka_producer = Producer(KAFKA_CONFIG)
         logging.info(f"Loaded {len(self.symbols)} symbols from configuration")
         
@@ -175,37 +165,15 @@ class OrderBookCollector:
 
         if not bids or not asks:
             return {'symbol': symbol, 'status': 'incomplete_data'}
-
-        lastUpdateId = orderbook_data.get('lastUpdateId', 0)
+        
         count_bid_levels = len(bids)
         count_ask_levels = len(asks)
-        best_bid = Decimal(bids[0][0]).quantize(
-            Decimal('0.00000001'),
-            rounding=ROUND_HALF_UP
-        ) if bids else Decimal('0')
-        best_ask = Decimal(asks[0][0]).quantize(
-            Decimal('0.00000001'),
-            rounding=ROUND_HALF_UP
-        ) if asks else Decimal('0')
-        min_bid = Decimal(bids[-1][0]).quantize(
-            Decimal('0.00000001'),
-            rounding=ROUND_HALF_UP
-        ) if bids else Decimal('0')
-        max_ask = Decimal(asks[-1][0]).quantize(
-            Decimal('0.00000001'),
-            rounding=ROUND_HALF_UP
-        ) if asks else Decimal('0')
-
-        best_bid_float = float(best_bid)
-        best_ask_float = float(best_ask)
-        min_bid_float = float(min_bid)
-        max_ask_float = float(max_ask)
-        
-        max_pct_from_best_bid = round((best_bid_float - min_bid_float) / best_bid_float * 100)
-        max_pct_from_best_ask = round((max_ask_float - best_ask_float) / best_ask_float * 100)
-
-        # max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
-        # max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
+        best_bid = float(bids[0][0]) if bids else 0.0
+        best_ask = float(asks[0][0]) if asks else 0.0
+        min_bid = float(bids[-1][0]) if bids else 0.0
+        max_ask = float(asks[-1][0]) if asks else 0.0
+        max_pct_from_best_bid = round((best_bid-min_bid) / best_bid * 100)
+        max_pct_from_best_ask = round((max_ask-best_ask) / best_ask * 100)
 
         # Расчет глубины стакана
         def calculate_depth(orders, threshold, is_ask):
@@ -222,59 +190,35 @@ class OrderBookCollector:
                         break
                 total_sum += price * qty
             return total_sum
+       
+        # Calculate depth
+        bid_1 = calculate_depth(bids, best_bid * (1 - 0.01), False)
+        bid_3 = calculate_depth(bids, best_bid * (1 - 0.03), False)
+        bid_5 = calculate_depth(bids, best_bid * (1 - 0.05), False)
+        bid_8 = calculate_depth(bids, best_bid * (1 - 0.08), False)
+        bid_15 = calculate_depth(bids, best_bid * (1 - 0.15), False)
+        bid_20 = calculate_depth(bids, best_bid * (1 - 0.2), False)
+        bid_30 = calculate_depth(bids, best_bid * (1 - 0.3), False)
+        bid_60 = calculate_depth(bids, best_bid * (1 - 0.6), False)
 
-
-        # Calculate depth используя float значения
-        bid_1 = calculate_depth(bids, best_bid_float * (1 - 0.01), False)
-        bid_3 = calculate_depth(bids, best_bid_float * (1 - 0.03), False)
-        bid_5 = calculate_depth(bids, best_bid_float * (1 - 0.05), False)
-        bid_8 = calculate_depth(bids, best_bid_float * (1 - 0.08), False)
-        bid_15 = calculate_depth(bids, best_bid_float * (1 - 0.15), False)
-        bid_20 = calculate_depth(bids, best_bid_float * (1 - 0.2), False)
-        bid_30 = calculate_depth(bids, best_bid_float * (1 - 0.3), False)
-        bid_60 = calculate_depth(bids, best_bid_float * (1 - 0.6), False)
-
-        ask_1 = calculate_depth(asks, best_ask_float * (1 + 0.01), True)
-        ask_3 = calculate_depth(asks, best_ask_float * (1 + 0.03), True)
-        ask_5 = calculate_depth(asks, best_ask_float * (1 + 0.05), True)
-        ask_8 = calculate_depth(asks, best_ask_float * (1 + 0.08), True)
-        ask_15 = calculate_depth(asks, best_ask_float * (1 + 0.15), True)
-        ask_20 = calculate_depth(asks, best_ask_float * (1 + 0.2), True)
-        ask_30 = calculate_depth(asks, best_ask_float * (1 + 0.3), True)
-        ask_60 = calculate_depth(asks, best_ask_float * (1 + 0.6), True)
-        # # Calculate depth
-        # bid_1 = calculate_depth(bids, best_bid * (1 - 0.01), False)
-        # bid_3 = calculate_depth(bids, best_bid * (1 - 0.03), False)
-        # bid_5 = calculate_depth(bids, best_bid * (1 - 0.05), False)
-        # bid_8 = calculate_depth(bids, best_bid * (1 - 0.08), False)
-        # bid_15 = calculate_depth(bids, best_bid * (1 - 0.15), False)
-        # bid_20 = calculate_depth(bids, best_bid * (1 - 0.2), False)
-        # bid_30 = calculate_depth(bids, best_bid * (1 - 0.3), False)
-        # bid_60 = calculate_depth(bids, best_bid * (1 - 0.6), False)
-
-        # ask_1 = calculate_depth(asks, best_ask * (1 + 0.01), True)
-        # ask_3 = calculate_depth(asks, best_ask * (1 + 0.03), True)
-        # ask_5 = calculate_depth(asks, best_ask * (1 + 0.05), True)
-        # ask_8 = calculate_depth(asks, best_ask * (1 + 0.08), True)
-        # ask_15 = calculate_depth(asks, best_ask * (1 + 0.15), True)
-        # ask_20 = calculate_depth(asks, best_ask * (1 + 0.2), True)
-        # ask_30 = calculate_depth(asks, best_ask * (1 + 0.3), True)
-        # ask_60 = calculate_depth(asks, best_ask * (1 + 0.6), True)
+        ask_1 = calculate_depth(asks, best_ask * (1 + 0.01), True)
+        ask_3 = calculate_depth(asks, best_ask * (1 + 0.03), True)
+        ask_5 = calculate_depth(asks, best_ask * (1 + 0.05), True)
+        ask_8 = calculate_depth(asks, best_ask * (1 + 0.08), True)
+        ask_15 = calculate_depth(asks, best_ask * (1 + 0.15), True)
+        ask_20 = calculate_depth(asks, best_ask * (1 + 0.2), True)
+        ask_30 = calculate_depth(asks, best_ask * (1 + 0.3), True)
+        ask_60 = calculate_depth(asks, best_ask * (1 + 0.6), True)
 
         total_bid_volume = sum(float(p) * float(q) for p, q in bids)
-        total_ask_volume = sum(float(p) * float(q) for p, q in asks)
-
-        best_bid_float = float(best_bid)
-        best_ask_float = float(best_ask)
-        min_bid_float = float(min_bid)
-        max_ask_float = float(max_ask)
+        total_ask_volume = sum(float(p) * float(q) for p, q in asks)       
 
         return {
             'symbol': symbol,
-            'best_bid': best_bid_float,
-            'best_ask': best_ask_float,
-            'min_bid': min_bid_float,
-            'max_ask': max_ask_float,
+            'best_bid': best_bid,
+            'best_ask': best_ask,
+            'min_bid': min_bid,
+            'max_ask': max_ask,
             'depth_1pct_bid': round(bid_1),
             'depth_1pct_ask': round(ask_1),
             'depth_3pct_bid': round(bid_3),
@@ -296,8 +240,7 @@ class OrderBookCollector:
             'count_bid_levels': count_bid_levels,
             'count_ask_levels': count_ask_levels,
             'max_pct_from_best_bid': max_pct_from_best_bid,
-            'max_pct_from_best_ask': max_pct_from_best_ask,
-            'lastUpdateId': lastUpdateId,
+            'max_pct_from_best_ask': max_pct_from_best_ask,            
             'event_time': int(time.time()),
             'status': 'ok'
         }
