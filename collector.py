@@ -89,8 +89,15 @@ def get_exception_list():
     try:
         with open("exceptions.json", 'r') as f:
             return json.load(f).get("exceptions", [])
+    except FileNotFoundError:
+        logging.warning("exceptions.json not found, using empty exclusion list")
+        return []
+    except json.JSONDecodeError as e:
+        logging.error(f"Invalid JSON in exceptions.json: {e}")
+        return []
     except Exception as e:
-        raise 
+        logging.error(f"Error reading exceptions.json: {e}")
+        return []
 
 
 class IPSessionManager:
@@ -141,13 +148,7 @@ class OrderBookCollector:
                 and s['status'] == 'TRADING'
             ]
             logging.info(f"Fetched {len(symbols)} active trading symbols")
-            return symbols
-            # return [
-            #     s['symbol'] for s in data['symbols']
-            #     if s['quoteAsset'] == 'USDT' 
-            #     and s['symbol'] not in EXCLUDE_SYMBOLS
-            #     and s['status'] == 'TRADING'
-            # ]
+            return symbols            
         except Exception as e:
             logging.error(f"Failed to fetch symbols: {e}")
             raise
@@ -163,7 +164,7 @@ class OrderBookCollector:
         if not bids or not asks:
             return {'symbol': symbol, 'status': 'incomplete_data'}
 
-        lastUpdateId = orderbook_data.get('lastUpdateId', int)
+        lastUpdateId = orderbook_data.get('lastUpdateId', 0)
         count_bid_levels = len(bids)
         count_ask_levels = len(asks)
         best_bid = float(bids[0][0]) if bids else 0.0
@@ -232,8 +233,8 @@ class OrderBookCollector:
             'depth_20pct_ask': round(ask_20),
             'depth_30pct_bid': round(bid_30),
             'depth_30pct_ask': round(ask_30),
-            'depth_60pct_bid': round(bid_30),
-            'depth_60pct_ask': round(ask_30),
+            'depth_60pct_bid': round(bid_60),
+            'depth_60pct_ask': round(ask_60),
             'total_bid_volume': round(total_bid_volume),
             'total_ask_volume': round(total_ask_volume),
             'count_bid_levels': count_bid_levels,
@@ -307,19 +308,24 @@ class OrderBookCollector:
 
     def send_to_kafka(self, data):
         try:
-            # Сериализация данных в JSON
             json_data = json.dumps(data).encode('utf-8')
-            # Асинхронная отправка в Kafka
             self.kafka_producer.produce(
                 topic=KAFKA_TOPIC,
                 value=json_data,
                 callback=kafka_delivery_report
             )
-            # Периодически сбрасываем буфер для предотвращения переполнения
             self.kafka_producer.poll(0)
+        except BufferError as e:
+            logging.warning(f"Kafka producer queue full: {e}")
+            # Ждем и повторяем попытку
+            self.kafka_producer.poll(1)
+            self.kafka_producer.produce(
+                topic=KAFKA_TOPIC,
+                value=json_data,
+                callback=kafka_delivery_report
+            )
         except Exception as e:
             logging.error(f"Kafka send failed: {e}")
-    
     
     def run(self):
         logging.info("Starting collector service with Kafka integration")
