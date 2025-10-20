@@ -172,7 +172,7 @@ class OrderBookCollector:
         # Calculating the LOB depth
         def calculate_depth(orders, threshold, is_ask):
             total_sum = 0.0
-            orders.sort(key=lambda x: float(x[0]), reverse=not is_ask)
+            orders.sort(key=lambda x: float(x[0]), reverse=not is_ask)            
 
             for price_str, qty_str in orders:
                 price, qty = float(price_str), float(qty_str)
