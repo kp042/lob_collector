@@ -38,7 +38,7 @@ REQUEST_INTERVAL = 2.5
 TIMEOUT = 10
 
 # Logs
-LOG_FILE = "collector.log"
+LOG_FILE = "logs/collector.log"
 
 # Kafka configuration
 KAFKA_CONFIG = {
