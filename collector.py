@@ -1,14 +1,3 @@
-"""
-LOB (Limit Order Book) collector from Binance.
-Agggregated LOB by depth pcts data -> Kafka.
-All USDT and TRADING pairs. SPOT market only.
-VPS with 2 IP.
-~8-10 minutes for each itteration (for all coins) approximetely 
-according Binance request weight limits.
-About Binance Weights:
-https://www.binance.com/en/support/faq/detail/360004492232
-https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits
-"""
 import requests
 import time
 import logging

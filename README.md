@@ -340,6 +340,10 @@ docker system prune -f
 
 ## 📊 Binance API Reference
 
+### Useful Links
+- [Binance API Weight Explanation](https://www.binance.com/en/support/faq/detail/360004492232)
+- [Binance API Limits Documentation](https://developers.binance.com/docs/binance-spot-api-docs/rest-api/limits)
+
 ### Rate Limits
 - **Hard Limit**: 6,000 request weight per minute
 - **IP-based**: Limits tracked per IP address
