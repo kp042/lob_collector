@@ -264,12 +264,17 @@ class OrderBookCollector:
         total_bid_volume = sum(float(p) * float(q) for p, q in bids)
         total_ask_volume = sum(float(p) * float(q) for p, q in asks)
 
+        best_bid_float = float(best_bid)
+        best_ask_float = float(best_ask)
+        min_bid_float = float(min_bid)
+        max_ask_float = float(max_ask)
+
         return {
             'symbol': symbol,
-            'best_bid': str(best_bid),
-            'best_ask': str(best_ask),
-            'min_bid': str(min_bid),
-            'max_ask': str(max_ask),
+            'best_bid': best_bid_float,
+            'best_ask': best_ask_float,
+            'min_bid': min_bid_float,
+            'max_ask': max_ask_float,
             'depth_1pct_bid': round(bid_1),
             'depth_1pct_ask': round(ask_1),
             'depth_3pct_bid': round(bid_3),
