@@ -373,6 +373,6 @@ class OrderBookCollector:
 
 
 if __name__ == '__main__':
-    setup_logging(debug_mode=True)
+    setup_logging(debug_mode=False)
     collector = OrderBookCollector()
     collector.run()

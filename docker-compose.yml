@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   binance-lob-collector:
     build: .
@@ -12,6 +10,5 @@ services:
       - KAFKA_TOPIC=${KAFKA_TOPIC}
     network_mode: host
     volumes:
-      - ./logs:/app/logs
-    # Добавьте эту строку для правильных прав
+      - ./logs:/app/logs    
     user: "1000:1000"
